@@ -1,0 +1,3 @@
+[submodule "corpus/core"]
+	path = corpus/core
+	url = https://github.com/downsmash/core
