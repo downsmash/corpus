@@ -147,7 +147,7 @@ class MeleeFrameSync(StreamParser):
     """
     """
     @staticmethod
-    def match_digit(scene, small=False):
+    def match_digit(scene, small=False, mask=None):
         """Given a masked frame, estimate the uncovered digit.
         """
         matcher = TemplateMatcher(worst_match=0.45)
@@ -156,14 +156,14 @@ class MeleeFrameSync(StreamParser):
 
         for n in range(10):
             digit = get_digit_image(n, small=small)
-            _, candidates = matcher.match(digit, scene, scale=1)
+            _, candidates = matcher.match(digit, scene, scale=1, mask=mask)
             if candidates:
                 _, conf_black = max(candidates, key=lambda k: k[1])
             else:
                 conf_black = 0
 
             digit = get_digit_image(n, white=True, small=small)
-            _, candidates = matcher.match(digit, scene, scale=1)
+            _, candidates = matcher.match(digit, scene, scale=1, mask=mask)
             if candidates:
                 _, conf_white = max(candidates, key=lambda k: k[1])
             else:
@@ -179,21 +179,17 @@ class MeleeFrameSync(StreamParser):
         thresh_min = 200
         _, frame = cv2.threshold(frame, thresh_min, 255, cv2.THRESH_TOZERO)
 
-        boxes = [Rect(58, 245, 28, 26),
-                 Rect(58, 273, 28, 26),
-                 Rect(58, 315, 28, 26),
-                 Rect(58, 343, 28, 26),
-                 Rect(64, 377, 23, 21),
-                 Rect(64, 398, 23, 21)
+        boxes = [Rect(56, 243, 32, 30),
+                 Rect(56, 271, 32, 30),
+                 Rect(56, 313, 32, 30),
+                 Rect(56, 341, 32, 30),
+                 Rect(62, 375, 27, 25),
+                 Rect(62, 396, 27, 25)
                  ]
-        digits = [None for box in boxes]
-
         small = [False, False, False, False, True, True]
 
-        for idx, _ in enumerate(digits):
-            mask = boxes[idx].to_mask(528, 643, color=False)
-
-            digits[idx] = self.match_digit(frame * mask, small=small[idx])
+        digits = [self.match_digit(frame, small=s, mask=box)
+                  for s, box in zip(small, boxes)]
 
         if None not in digits:
             return "".join(str(d) for d in digits)
@@ -202,11 +198,11 @@ class MeleeFrameSync(StreamParser):
 
 
 def __main__():
-    mfs = MeleeFrameSync('samples/zelda-ic-fd.avi')
+    mfs = MeleeFrameSync('samples/gw-pika-fd.avi')
     realtimes = timer_values()
     realtime = next(realtimes)
 
-    for _ in range(103):
+    for _ in range(116):
         frame = mfs.get_frame()
 
     for _ in range(1000):
