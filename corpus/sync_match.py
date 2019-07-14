@@ -1,6 +1,7 @@
 """
 """
 
+from argparse import ArgumentParser
 from re import match
 from functools import lru_cache
 
@@ -211,12 +212,21 @@ class MeleeFrameSync(StreamParser):
 
 
 def __main__():
-    mfs = MeleeFrameSync('samples/hbox-amsa.avi')
+    parser = ArgumentParser()
+
+    parser.add_argument("video", metavar="match.avi",
+                        help=("The Slippi video file to be synced. "
+                              "Must be 643x528."))
+
+    args = parser.parse_args()
+
+    mfs = MeleeFrameSync(args.video)
+
     realtimes = timer_values()
     realtime = next(realtimes)
 
     time = None
-    while time != '075999':
+    while time != "075999":
         frame = mfs.get_frame()
         time = mfs.get_frame_time(frame)
 
@@ -229,5 +239,5 @@ def __main__():
         time = mfs.get_frame_time(frame)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     __main__()
