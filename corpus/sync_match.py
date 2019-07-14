@@ -1,8 +1,10 @@
 """
 """
 
-from pkg_resources import resource_string
+from re import match
+from functools import lru_cache
 
+from pkg_resources import resource_string
 import numpy as np
 import cv2
 
@@ -20,20 +22,24 @@ VALID_FRAMES = [99, 98, 96, 94, 93, 91,
                 39, 37, 36, 34, 32, 31,
                 29, 27, 26, 24, 22, 21,
                 19, 17, 16, 14, 12, 11,
-                9, 7, 6, 4, 2, 0]
+                9,  7,  6,  4,  2,  0]
 
 
 def is_valid(time):
     """Return whether the given string represents a frame that can occur
     on Melee's timer.
 
+    We require the first digit to be a 0 for now because it always should be.
+
     Parameters
     ----------
     time : str
         A string.
     """
-    return (len(time) == 6 and time.isnumeric()
-            and int(time[4:]) in VALID_FRAMES)
+    if time is not None:
+        return (match(r"0\d[0-5]\d\d\d", time)
+                and int(time[4:]) in VALID_FRAMES)
+    return False
 
 
 def distance(fr, to):
@@ -66,6 +72,7 @@ def distance(fr, to):
     return (minutes * 60 * 60) + (seconds * 60) - frames
 
 
+@lru_cache(maxsize=None)
 def get_digit_image(digit, small=False, color=False, white=False):
     """Return the asset corresponding to the requested timer `digit`, as it
     would appear in-game.
@@ -135,8 +142,7 @@ def timer_values(start_time=480):
         minutes, seconds = seconds_left // 60, int(seconds_left) % 60
 
         for centis in VALID_FRAMES:
-            # I believe that 00:05.00 is not shown,
-            # but have not confirmed this
+            # 00:05.00 is not shown.
             if seconds_left == 5 and centis == 0:
                 return
 
@@ -150,20 +156,22 @@ class MeleeFrameSync(StreamParser):
     def match_digit(scene, small=False, mask=None):
         """Given a masked frame, estimate the uncovered digit.
         """
-        matcher = TemplateMatcher(worst_match=0.45)
+        matcher = TemplateMatcher(worst_match=0.4, debug=False)
 
         conf_array = [0 for n in range(10)]
 
         for n in range(10):
             digit = get_digit_image(n, small=small)
-            _, candidates = matcher.match(digit, scene, scale=1, mask=mask)
+            _, candidates = matcher.match(digit, scene, scale=1, mask=mask,
+                                          cluster=False)
             if candidates:
                 _, conf_black = max(candidates, key=lambda k: k[1])
             else:
                 conf_black = 0
 
             digit = get_digit_image(n, white=True, small=small)
-            _, candidates = matcher.match(digit, scene, scale=1, mask=mask)
+            _, candidates = matcher.match(digit, scene, scale=1, mask=mask,
+                                          cluster=False)
             if candidates:
                 _, conf_white = max(candidates, key=lambda k: k[1])
             else:
@@ -171,7 +179,12 @@ class MeleeFrameSync(StreamParser):
 
             conf_array[n] = max(conf_black, conf_white)
 
-        return max(range(10), key=lambda n: conf_array[n])
+        choice = max(range(10), key=lambda n: conf_array[n])
+        # print(choice, ("{:.03f}\t"*10).format(*conf_array))
+
+        if conf_array[choice] > matcher.worst_match:
+            return choice
+        return None
 
     def get_frame_time(self, frame):
         """Read the timestamp of this frame.
@@ -198,19 +211,22 @@ class MeleeFrameSync(StreamParser):
 
 
 def __main__():
-    mfs = MeleeFrameSync('samples/gw-pika-fd.avi')
+    mfs = MeleeFrameSync('samples/hbox-amsa.avi')
     realtimes = timer_values()
     realtime = next(realtimes)
 
-    for _ in range(116):
-        frame = mfs.get_frame()
-
-    for _ in range(1000):
+    time = None
+    while time != '075999':
         frame = mfs.get_frame()
         time = mfs.get_frame_time(frame)
-        print(time, realtime, distance(time, realtime))
 
+    for _ in range(600):
         realtime = next(realtimes)
+        if distance(time, realtime):
+            print(time, realtime, distance(time, realtime))
+
+        frame = mfs.get_frame()
+        time = mfs.get_frame_time(frame)
 
 
 if __name__ == '__main__':
