@@ -231,7 +231,7 @@ class MeleeFrameSync(StreamParser):
             if dist is None:
                 pass
             elif dist == frames_behind:
-                yield (frame_count, frames_behind)
+                yield (frame, frame_count, frames_behind)
             elif dist - frames_behind == -1:
                 LOGGER.warning("Repeated frame %d (%d frames behind)",
                                frame_count, dist)
