@@ -236,6 +236,7 @@ class MeleeFrameSync(StreamParser):
                 LOGGER.warning("Repeated frame %d (%d frames behind)",
                                frame_count, dist)
                 frames_behind = dist
+                yield (frame, frame_count, frames_behind)
             elif 30 > dist - frames_behind > 0:
                 LOGGER.warning(("Skipped %d frame%s after frame %d "
                                 "(%d frames behind)"),
@@ -244,6 +245,7 @@ class MeleeFrameSync(StreamParser):
                                frame_count,
                                dist)
                 frames_behind = dist
+                yield (frame, frame_count, frames_behind)
 
             frame = self.get_frame()
             frame_count += 1
