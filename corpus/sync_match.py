@@ -2,7 +2,7 @@
 """
 
 from argparse import ArgumentParser
-from re import match
+import re
 from functools import lru_cache
 
 from pkg_resources import resource_string
@@ -25,6 +25,8 @@ VALID_FRAMES = [99, 98, 96, 94, 93, 91,
                 19, 17, 16, 14, 12, 11,
                 9,  7,  6,  4,  2,  0]
 
+VALID_FRAMES_REGEX = re.compile(r'^0[0-7][0-5]\d([5-9][134689]|[1-4][124679]|0[024679])$')
+
 
 def is_valid(time):
     """Return whether the given string represents a frame that can occur
@@ -37,10 +39,8 @@ def is_valid(time):
     time : str
         A string.
     """
-    if time is not None:
-        return (match(r"0\d[0-5]\d\d\d", time)
-                and int(time[4:]) in VALID_FRAMES)
-    return False
+    return (time is not None and
+            re.match(VALID_FRAMES_REGEX, time))
 
 
 def distance(fr, to):
@@ -157,28 +157,27 @@ class MeleeFrameSync(StreamParser):
     def match_digit(scene, small=False, mask=None):
         """Given a masked frame, estimate the uncovered digit.
         """
-        matcher = TemplateMatcher(worst_match=0.4, debug=False)
+        matcher = TemplateMatcher(worst_match=0.4)
 
         conf_array = [0 for n in range(10)]
 
-        for n in range(10):
-            digit = get_digit_image(n, small=small)
+        def get_digit_conf(digit):
             _, candidates = matcher.match(digit, scene, scale=1, mask=mask,
                                           cluster=False)
             if candidates:
-                _, conf_black = max(candidates, key=lambda k: k[1])
+                _, conf = max(candidates, key=lambda k: k[1])
             else:
-                conf_black = 0
+                conf = 0
 
-            digit = get_digit_image(n, white=True, small=small)
-            _, candidates = matcher.match(digit, scene, scale=1, mask=mask,
-                                          cluster=False)
-            if candidates:
-                _, conf_white = max(candidates, key=lambda k: k[1])
-            else:
-                conf_white = 0
+            return conf
 
-            conf_array[n] = max(conf_black, conf_white)
+        for digit in range(10):
+            conf_black = get_digit_conf(get_digit_image(digit, small=small))
+
+            conf_white = get_digit_conf(get_digit_image(digit, small=small,
+                                                        white=True))
+
+            conf_array[digit] = max(conf_black, conf_white)
 
         choice = max(range(10), key=lambda n: conf_array[n])
         # print(choice, ("{:.03f}\t"*10).format(*conf_array))
@@ -213,10 +212,11 @@ class MeleeFrameSync(StreamParser):
 
 def __main__():
     parser = ArgumentParser()
-
     parser.add_argument("video", metavar="match.avi",
-                        help=("The Slippi video file to be synced. "
-                              "Must be 643x528."))
+                        help=("the Slippi video file to be synced "
+                              "(must be 643x528)"))
+    parser.add_argument("frames", nargs="?", type=int, default=600,
+                        help="the number of frames to read (default is 600)")
 
     args = parser.parse_args()
 
@@ -230,7 +230,7 @@ def __main__():
         frame = mfs.get_frame()
         time = mfs.get_frame_time(frame)
 
-    for _ in range(600):
+    for _ in range(args.frames):
         realtime = next(realtimes)
         if distance(time, realtime):
             print(time, realtime, distance(time, realtime))
