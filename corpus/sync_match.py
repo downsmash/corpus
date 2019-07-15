@@ -130,14 +130,13 @@ def get_digit_image(digit, small=False, color=False, white=False):
 
 def timer_values(start_time=480):
     """Generate the valid timer values for a single match of Melee, starting
-    at `start_time` seconds and counting down.
+    at the frame after `start_time` seconds and counting down.
 
     I haven't timed the countdown from 5 seconds to 0. Presumably it remains
     at 60 fps.
     """
     minutes, seconds = start_time // 60, int(start_time) % 60
     centis = 0
-    yield "{:02d}{:02d}{:02d}".format(minutes, seconds, centis)
 
     for seconds_left in range(start_time - 1, 5 - 1, -1):
         minutes, seconds = seconds_left // 60, int(seconds_left) % 60
@@ -209,6 +208,42 @@ class MeleeFrameSync(StreamParser):
 
         return None
 
+    def sync_frames(self):
+        """
+        """
+        time = None
+        frame_count = 0
+        while time != "075999":
+            frame = self.get_frame()
+            frame_count += 1
+            time = self.get_frame_time(frame)
+
+        print("Found match start after {0} frames.".format(frame_count))
+
+        frames_behind = 0
+
+        for realtime in timer_values():
+            dist = distance(time, realtime)
+            if dist is None:
+                pass
+            elif dist == frames_behind:
+                yield (frame_count, frames_behind)
+            elif dist - frames_behind == -1:
+                print("Repeated frame {0} ({1} frames behind)"
+                      .format(frame_count, dist))
+                frames_behind = dist
+            elif 30 > dist - frames_behind > 0:
+                print("Skipped {0} frame{1} after frame {2} ({3} frames behind)"
+                      .format(dist - frames_behind,
+                              "s" if dist - frames_behind > 1 else "",
+                              frame_count,
+                              dist))
+                frames_behind = dist
+
+            frame = self.get_frame()
+            frame_count += 1
+            time = self.get_frame_time(frame)
+
 
 def __main__():
     parser = ArgumentParser()
@@ -220,23 +255,10 @@ def __main__():
 
     args = parser.parse_args()
 
-    mfs = MeleeFrameSync(args.video)
-
-    realtimes = timer_values()
-    realtime = next(realtimes)
-
-    time = None
-    while time != "075999":
-        frame = mfs.get_frame()
-        time = mfs.get_frame_time(frame)
+    mfs = MeleeFrameSync(args.video).sync_frames()
 
     for _ in range(args.frames):
-        realtime = next(realtimes)
-        if distance(time, realtime):
-            print(time, realtime, distance(time, realtime))
-
-        frame = mfs.get_frame()
-        time = mfs.get_frame_time(frame)
+        _ = next(mfs)
 
 
 if __name__ == "__main__":
