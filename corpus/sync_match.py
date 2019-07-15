@@ -3,6 +3,7 @@
 
 from argparse import ArgumentParser
 import re
+import logging
 from functools import lru_cache
 
 from pkg_resources import resource_string
@@ -13,6 +14,7 @@ from core.stream_parser import StreamParser
 from core.template_matcher import TemplateMatcher
 from core.rect import Rect
 
+LOGGER = logging.getLogger(__name__)
 
 VALID_FRAMES = [99, 98, 96, 94, 93, 91,
                 89, 88, 86, 84, 83, 81,
@@ -179,7 +181,8 @@ class MeleeFrameSync(StreamParser):
             conf_array[digit] = max(conf_black, conf_white)
 
         choice = max(range(10), key=lambda n: conf_array[n])
-        # print(choice, ("{:.03f}\t"*10).format(*conf_array))
+        LOGGER.info("%d\t" + ("%.03f\t" * 10),
+                    choice, *conf_array)
 
         if conf_array[choice] > matcher.worst_match:
             return choice
@@ -218,7 +221,8 @@ class MeleeFrameSync(StreamParser):
             frame_count += 1
             time = self.get_frame_time(frame)
 
-        print("Found match start after {0} frames.".format(frame_count))
+        LOGGER.warning("Found match start after %d frames.",
+                       frame_count)
 
         frames_behind = 0
 
@@ -229,15 +233,16 @@ class MeleeFrameSync(StreamParser):
             elif dist == frames_behind:
                 yield (frame_count, frames_behind)
             elif dist - frames_behind == -1:
-                print("Repeated frame {0} ({1} frames behind)"
-                      .format(frame_count, dist))
+                LOGGER.warning("Repeated frame %d (%d frames behind)",
+                               frame_count, dist)
                 frames_behind = dist
             elif 30 > dist - frames_behind > 0:
-                print("Skipped {0} frame{1} after frame {2} ({3} frames behind)"
-                      .format(dist - frames_behind,
-                              "s" if dist - frames_behind > 1 else "",
-                              frame_count,
-                              dist))
+                LOGGER.warning(("Skipped %d frame%s after frame %d "
+                                "(%d frames behind)"),
+                               dist - frames_behind,
+                               "s" if dist - frames_behind > 1 else "",
+                               frame_count,
+                               dist)
                 frames_behind = dist
 
             frame = self.get_frame()
